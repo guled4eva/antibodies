@@ -48,6 +48,27 @@ def test_tool_text():
     assert "pI" in out
 
 
+def test_dotenv_strips_inline_comments():
+    """Regression: `KEY=value  # comment` must not keep the comment in the value."""
+    import os
+    import tempfile
+
+    from abagent.agent import _load_dotenv
+
+    d = tempfile.mkdtemp()
+    cwd = os.getcwd()
+    try:
+        os.chdir(d)
+        with open(".env", "w") as fh:
+            fh.write("ABAGENT_PROVIDER=gemini          # or: anthropic\n")
+        os.environ.pop("ABAGENT_PROVIDER", None)
+        _load_dotenv()
+        assert os.environ["ABAGENT_PROVIDER"] == "gemini"
+    finally:
+        os.chdir(cwd)
+        os.environ.pop("ABAGENT_PROVIDER", None)
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

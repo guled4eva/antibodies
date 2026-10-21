@@ -21,6 +21,9 @@ def _load_dotenv() -> None:
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     k, v = line.split("=", 1)
+                    # drop inline comments:  VALUE   # note  ->  VALUE
+                    for sep in (" #", "\t#"):
+                        v = v.split(sep, 1)[0]
                     os.environ.setdefault(k.strip(), v.strip().strip("'\""))
             return
 
