@@ -28,6 +28,27 @@ def _load_dotenv() -> None:
             return
 
 
+def _friendly_error(exc: Exception) -> str:
+    """Turn a provider SDK exception into one actionable sentence."""
+    msg = str(exc)
+    low = msg.lower()
+    if any(s in low for s in ("api key not valid", "api_key_invalid", "invalid api key",
+                              "unauthenticated", "unauthorized", "401", "403",
+                              "permission_denied")):
+        return ("The API key was rejected. Check the key in .env is a real one — "
+                "Gemini keys start with 'AIzaSy' (get one at "
+                "https://aistudio.google.com/apikey); Claude keys start with 'sk-ant-'.")
+    if any(s in low for s in ("quota", "resource_exhausted", "rate limit", "429")):
+        return "Rate limit or quota reached. Wait a minute, then try again."
+    if "model" in low and ("not found" in low or "404" in low):
+        return ("That model name isn't available to your key. Try another, e.g. "
+                "set ABAGENT_MODEL=gemini-2.5-flash  (or gemini-1.5-flash).")
+    if any(s in low for s in ("connection", "timeout", "temporarily unavailable",
+                              "network", "getaddrinfo")):
+        return "Could not reach the API — looks like a network problem. Check your connection."
+    return f"{type(exc).__name__}: {msg[:300]}"
+
+
 def repl() -> None:
     _load_dotenv()
     backend = get_backend()  # raises a clear error if the key is missing
@@ -38,7 +59,10 @@ def repl() -> None:
             user = input("you> ").strip()
             if not user:
                 continue
-            print("\nagent>", backend.send(user), "\n")
+            try:
+                print("\nagent>", backend.send(user), "\n")
+            except Exception as exc:
+                print("\n[error]", _friendly_error(exc), "\n")
     except (EOFError, KeyboardInterrupt):
         print("\nbye")
 
