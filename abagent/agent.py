@@ -44,8 +44,11 @@ def _friendly_error(exc: Exception) -> str:
         return ("That model name isn't available (Google retires old ones). The error "
                 "usually names the replacement — set it, e.g. "
                 "ABAGENT_MODEL=gemini-3.8-flash")
-    if any(s in low for s in ("connection", "timeout", "temporarily unavailable",
-                              "network", "getaddrinfo")):
+    if any(s in low for s in ("503", "unavailable", "high demand", "overloaded")):
+        return ("The model is busy on the provider's side (not your setup) — this is "
+                "temporary. Try again in a minute, or switch model/provider, e.g. "
+                "ABAGENT_PROVIDER=anthropic.")
+    if any(s in low for s in ("connection", "timeout", "network", "getaddrinfo")):
         return "Could not reach the API — looks like a network problem. Check your connection."
     return f"{type(exc).__name__}: {msg[:300]}"
 
