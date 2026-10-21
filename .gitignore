@@ -9,5 +9,6 @@ venv/
 .env
 *.pdb
 fv_model.pdb
+data/
 .pytest_cache/
 .ipynb_checkpoints/

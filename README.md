@@ -31,6 +31,21 @@ pip install -e ".[structure]"    # add ImmuneBuilder for Fv structure (heavy)
 export ANTHROPIC_API_KEY=...      # hackathon provides Claude credits
 ```
 
+## Data
+
+Validation / benchmarking uses the **SAbDab2 ML Dataset** (Oxford OPIG) —
+16,415 curated antibody and antibody–antigen structures with train/test splits.
+It is ~958 MB, so it is not committed; fetch it on demand:
+
+```bash
+python scripts/get_data.py     # downloads + verifies + extracts into ./data (gitignored)
+```
+
+Licensed CC-BY-4.0. If you use it, cite:
+> Capel, H. L., Vavourakis, O., Williams, B. H., Taylor, C., & Deane, C. M.
+> (2026). *SAbDab2 Machine Learning Dataset* (v0.3.0) [Dataset]. Zenodo.
+> https://doi.org/10.5281/zenodo.23343734
+
 ## Run
 
 ```bash
