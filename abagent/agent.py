@@ -35,9 +35,9 @@ def _friendly_error(exc: Exception) -> str:
     if any(s in low for s in ("api key not valid", "api_key_invalid", "invalid api key",
                               "unauthenticated", "unauthorized", "401", "403",
                               "permission_denied")):
-        return ("The API key was rejected. Check the key in .env is a real one — "
-                "Gemini keys start with 'AIzaSy' (get one at "
-                "https://aistudio.google.com/apikey); Claude keys start with 'sk-ant-'.")
+        return ("The API key was rejected. Check the key in .env matches the provider: "
+                "Gemini keys come from https://aistudio.google.com/apikey, "
+                "Claude keys from https://console.anthropic.com.")
     if any(s in low for s in ("quota", "resource_exhausted", "rate limit", "429")):
         return "Rate limit or quota reached. Wait a minute, then try again."
     if "model" in low and ("not found" in low or "404" in low):
