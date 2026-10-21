@@ -41,8 +41,9 @@ def _friendly_error(exc: Exception) -> str:
     if any(s in low for s in ("quota", "resource_exhausted", "rate limit", "429")):
         return "Rate limit or quota reached. Wait a minute, then try again."
     if "model" in low and ("not found" in low or "404" in low):
-        return ("That model name isn't available to your key. Try another, e.g. "
-                "set ABAGENT_MODEL=gemini-2.5-flash  (or gemini-1.5-flash).")
+        return ("That model name isn't available (Google retires old ones). The error "
+                "usually names the replacement — set it, e.g. "
+                "ABAGENT_MODEL=gemini-3.8-flash")
     if any(s in low for s in ("connection", "timeout", "temporarily unavailable",
                               "network", "getaddrinfo")):
         return "Could not reach the API — looks like a network problem. Check your connection."

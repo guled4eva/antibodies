@@ -66,7 +66,7 @@ ABAGENT_PROVIDER=gemini    abagent     # needs GEMINI_API_KEY
 
 Gemini has a free tier — get a key at https://aistudio.google.com/apikey and put
 `GEMINI_API_KEY=...` in your `.env`. Override the model name with `ABAGENT_MODEL`
-(defaults: `claude-opus-4-8`, `gemini-2.0-flash`).
+(defaults: `claude-opus-4-8`, `gemini-3.8-flash`).
 
 To confirm the whole agent path works **without an API key or network** (runs
 the real tool-dispatch loop against a scripted fake client):

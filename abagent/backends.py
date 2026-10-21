@@ -29,7 +29,7 @@ TOOL_FUNCS = [analyse_antibody, predict_structure]
 
 DEFAULT_MODELS = {
     "anthropic": "claude-opus-4-8",
-    "gemini": "gemini-2.0-flash",
+    "gemini": "gemini-3.8-flash",
 }
 
 
