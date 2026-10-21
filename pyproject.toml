@@ -11,7 +11,6 @@ requires-python = ">=3.10"
 dependencies = [
     "anthropic>=0.40",
     "google-genai>=1.0",
-    "biopython>=1.83",
 ]
 
 [project.optional-dependencies]

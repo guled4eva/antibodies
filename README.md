@@ -25,7 +25,7 @@ and uses Claude only to orchestrate and explain — never to invent numbers.
 ## Install
 
 ```bash
-pip install -e .                 # core: anthropic + biopython
+pip install -e .                 # core: anthropic + google-genai (pure Python)
 pip install -e ".[numbering]"    # add anarcii for real IMGT numbering (heavy)
 pip install -e ".[structure]"    # add ImmuneBuilder for Fv structure (heavy)
 export ANTHROPIC_API_KEY=...      # hackathon provides Claude credits
