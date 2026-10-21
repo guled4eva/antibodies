@@ -20,7 +20,7 @@ structure = ["ImmuneBuilder"] # ABodyBuilder2 Fv structure prediction
 dev = ["pytest"]
 
 [project.scripts]
-abagent = "abagent.agent:repl"
+abagent = "abagent.agent:main"
 
 [tool.setuptools]
 packages = ["abagent"]

@@ -55,6 +55,13 @@ abagent          # start the chat agent
 Then paste a sequence and ask, e.g. *"any liabilities in the CDRs I should worry
 about?"*
 
+To confirm the whole agent path works **without an API key or network** (runs
+the real tool-dispatch loop against a scripted fake client):
+
+```bash
+abagent --selftest
+```
+
 ## Layout
 
 | file | role |
