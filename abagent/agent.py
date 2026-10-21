@@ -1,7 +1,8 @@
-"""The chat agent: a Claude tool-use loop over the antibody tools.
+"""The chat agent REPL and an offline selftest.
 
-You talk to it in plain language and paste sequences; it decides when to call
-`analyse_antibody` / `predict_structure`, reads the results, and explains them.
+You talk to it in plain language and paste sequences; the chosen backend
+(Claude or Gemini) decides when to call the antibody tools, reads the results,
+and explains them. Pick the model with ABAGENT_PROVIDER=anthropic|gemini.
 """
 
 from __future__ import annotations
@@ -9,49 +10,7 @@ from __future__ import annotations
 import os
 import sys
 
-from anthropic import Anthropic
-
-from .tools import TOOL_SCHEMAS, run_tool
-
-MODEL = os.environ.get("ABAGENT_MODEL", "claude-opus-4-8")
-
-SYSTEM = (
-    "You are an antibody engineering assistant for a drug-discovery team. "
-    "When the user gives antibody sequences, call the analysis tools rather "
-    "than guessing. Read the tool output and explain, in plain terms, what it "
-    "means for developability: which liabilities actually matter (a liability "
-    "inside CDR3 or at a paratope residue is far more serious than one buried "
-    "in framework), what the pI and charge imply for formulation and "
-    "aggregation, and what you would check or change next. Be concrete and "
-    "honest about uncertainty, and say when a result comes from the rough "
-    "fallback engine rather than a validated one. Do not fabricate numbers."
-)
-
-
-def _run_tools(blocks) -> list[dict]:
-    results = []
-    for block in blocks:
-        if block.type == "tool_use":
-            output = run_tool(block.name, block.input)
-            results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": output,
-            })
-    return results
-
-
-def chat_once(client: Anthropic, messages: list[dict]) -> str:
-    """Advance the conversation one user turn, running tools until the model stops."""
-    while True:
-        resp = client.messages.create(
-            model=MODEL, max_tokens=2048, system=SYSTEM,
-            tools=TOOL_SCHEMAS, messages=messages,
-        )
-        messages.append({"role": "assistant", "content": resp.content})
-        if resp.stop_reason != "tool_use":
-            return "".join(b.text for b in resp.content if b.type == "text")
-        messages.append({"role": "user", "content": _run_tools(resp.content)})
+from .backends import chat_once, get_backend
 
 
 def _load_dotenv() -> None:
@@ -68,28 +27,25 @@ def _load_dotenv() -> None:
 
 def repl() -> None:
     _load_dotenv()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise SystemExit("Set ANTHROPIC_API_KEY (export it, or put it in a .env file).")
-    client = Anthropic()
-    messages: list[dict] = []
-    print("Antibody agent. Paste sequences or ask a question. Ctrl-D to quit.\n")
+    backend = get_backend()  # raises a clear error if the key is missing
+    print(f"Antibody agent [{backend.name}:{backend.model}]. "
+          "Paste sequences or ask a question. Ctrl-D to quit.\n")
     try:
         while True:
             user = input("you> ").strip()
             if not user:
                 continue
-            messages.append({"role": "user", "content": user})
-            print("\nagent>", chat_once(client, messages), "\n")
+            print("\nagent>", backend.send(user), "\n")
     except (EOFError, KeyboardInterrupt):
         print("\nbye")
 
 
 def selftest() -> int:
-    """Exercise the whole agent path offline: no API key, no network.
+    """Exercise the agent path offline: no API key, no network.
 
-    Uses a scripted fake client that asks for the `analyse_antibody` tool and
-    then replies with text, so the real tool-dispatch loop in `chat_once` runs
-    end to end against the real tools.
+    1. Runs the real Anthropic tool-dispatch loop against a scripted fake client.
+    2. Checks the Gemini backend wires the tools up (if google-genai is installed),
+       without making any network call.
     """
     from types import SimpleNamespace
 
@@ -110,23 +66,36 @@ def selftest() -> int:
                 block = SimpleNamespace(type="tool_use", name="analyse_antibody",
                                         id="t1", input={"heavy": TRAST_VH, "name": "trastuzumab"})
                 return SimpleNamespace(content=[block], stop_reason="tool_use")
-            # capture what the tool returned (fed back in the last user message)
-            last = kw["messages"][-1]["content"][0]
-            self.tool_output = last["content"]
+            self.tool_output = kw["messages"][-1]["content"][0]["content"]
             text = SimpleNamespace(type="text", text="Analysis complete; see tool output above.")
             return SimpleNamespace(content=[text], stop_reason="end_turn")
 
+    checks: dict[str, bool] = {}
+
+    # 1. Anthropic loop
     client = FakeClient()
     messages = [{"role": "user", "content": "analyse this VH: " + TRAST_VH}]
-    print("[selftest] running agent loop with a fake client (no API, no network)...")
-    reply = chat_once(client, messages)
+    print("[selftest] anthropic loop with fake client (no API, no network)...")
+    reply = chat_once(client, messages, model="fake")
+    checks["anthropic: tool was called"] = client.calls == 2
+    checks["anthropic: tool produced a report"] = bool(client.tool_output) and "Chain H" in client.tool_output
+    checks["anthropic: report has biophysics"] = bool(client.tool_output) and "pI" in client.tool_output
+    checks["anthropic: loop returned text"] = bool(reply)
 
-    checks = {
-        "tool was called": client.calls == 2,
-        "tool produced a report": client.tool_output and "Chain H" in client.tool_output,
-        "report has biophysics": client.tool_output and "pI" in client.tool_output,
-        "loop returned final text": bool(reply),
-    }
+    # 2. Gemini wiring (construction only, dummy key, no send -> no network)
+    print("[selftest] gemini backend wiring (dummy key, no network)...")
+    try:
+        from .backends import GeminiBackend
+        os.environ.setdefault("GEMINI_API_KEY", "selftest-dummy")
+        gb = GeminiBackend()
+        checks["gemini: backend constructs"] = gb.name == "gemini"
+        checks["gemini: chat session created"] = gb.chat is not None
+    except ImportError:
+        print("  (google-genai not installed; skipping gemini checks)")
+    except Exception as exc:  # construction should not hit the network
+        checks["gemini: backend constructs"] = False
+        print(f"  gemini wiring error: {exc}")
+
     ok = all(checks.values())
     for name, passed in checks.items():
         print(f"  [{'PASS' if passed else 'FAIL'}] {name}")

@@ -55,6 +55,19 @@ abagent          # start the chat agent
 Then paste a sequence and ask, e.g. *"any liabilities in the CDRs I should worry
 about?"*
 
+### Choosing the model (Claude or Gemini)
+
+The same tools run under either model; pick with `ABAGENT_PROVIDER`:
+
+```bash
+ABAGENT_PROVIDER=anthropic abagent     # default; needs ANTHROPIC_API_KEY
+ABAGENT_PROVIDER=gemini    abagent     # needs GEMINI_API_KEY
+```
+
+Gemini has a free tier — get a key at https://aistudio.google.com/apikey and put
+`GEMINI_API_KEY=...` in your `.env`. Override the model name with `ABAGENT_MODEL`
+(defaults: `claude-opus-4-8`, `gemini-2.0-flash`).
+
 To confirm the whole agent path works **without an API key or network** (runs
 the real tool-dispatch loop against a scripted fake client):
 

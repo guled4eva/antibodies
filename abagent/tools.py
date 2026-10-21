@@ -50,6 +50,16 @@ TOOL_SCHEMAS = [
 
 
 def analyse_antibody(heavy: str = "", light: str = "", name: str = "query") -> str:
+    """Analyse an antibody variable region.
+
+    Numbers the chain(s), extracts CDR loops, and reports developability:
+    sequence liabilities, isoelectric point, net charge and hydrophobicity.
+
+    Args:
+        heavy: Heavy-chain VH amino-acid sequence (optional).
+        light: Light-chain VL amino-acid sequence (optional).
+        name: Label for this antibody.
+    """
     try:
         ab = Antibody(heavy=heavy or None, light=light or None, name=name)
     except SequenceError as exc:
@@ -63,6 +73,12 @@ def analyse_antibody(heavy: str = "", light: str = "", name: str = "query") -> s
 
 
 def predict_structure(heavy: str = "", light: str = "") -> str:
+    """Predict the 3D Fv structure (ABodyBuilder2) and write a PDB file.
+
+    Args:
+        heavy: Heavy-chain VH amino-acid sequence (optional).
+        light: Light-chain VL amino-acid sequence (optional).
+    """
     res = predict_fv(heavy or None, light or None)
     return res.message
 
