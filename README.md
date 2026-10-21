@@ -62,6 +62,22 @@ the real tool-dispatch loop against a scripted fake client):
 abagent --selftest
 ```
 
+## Building a standalone executable (optional)
+
+Bundles Python + the code into one double-clickable file for teammates who
+don't have Python. It still needs an `ANTHROPIC_API_KEY` and internet to chat.
+PyInstaller cannot cross-compile, so **build on the OS you want the binary for**
+— run this from Windows PowerShell to get `abagent.exe`:
+
+```bash
+pip install pyinstaller
+pyinstaller packaging/abagent.spec      # output in dist/  (abagent.exe on Windows)
+dist/abagent --selftest                 # verify the frozen build
+```
+
+The heavy optional engines (torch/anarcii/ImmuneBuilder) are excluded from the
+build to keep it small (~50 MB); the frozen binary uses the fallback engines.
+
 ## Layout
 
 | file | role |

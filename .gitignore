@@ -12,3 +12,8 @@ fv_model.pdb
 data/
 .pytest_cache/
 .ipynb_checkpoints/
+
+# PyInstaller
+packaging/build/
+packaging/dist/
+*.spec.bak
