@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "abagent"
+version = "0.1.0"
+description = "AI agent for antibody developability analysis (AI x Antibodies Hackathon, Oslo)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.40",
+    "biopython>=1.83",
+]
+
+[project.optional-dependencies]
+# Heavy engines, installed on hackathon day to upgrade from the fallbacks.
+numbering = ["anarcii"]       # proper IMGT/Kabat numbering (pulls in torch)
+structure = ["ImmuneBuilder"] # ABodyBuilder2 Fv structure prediction
+dev = ["pytest"]
+
+[project.scripts]
+abagent = "abagent.agent:repl"
+
+[tool.setuptools]
+packages = ["abagent"]

@@ -1,0 +1,71 @@
+# abagent — antibody developability agent
+
+Built for the **AI × Antibodies Hackathon**, Oslo, 14 November 2026.
+
+You paste an antibody's heavy and/or light chain into a chat agent and ask
+questions. The agent calls deterministic analysis tools and explains the
+results the way a drug-discovery team needs them — *which* sequence liabilities
+actually matter, what the charge and hydrophobicity mean for formulation, and
+what to check or change next.
+
+The point of the hackathon is "results a drug-discovery team can actually
+trust", so the design keeps the science in small, inspectable Python functions
+and uses Claude only to orchestrate and explain — never to invent numbers.
+
+## What it does now
+
+- **Numbering + CDRs** — IMGT numbering and CDR extraction (`anarcii` when
+  installed; a conserved-residue heuristic as a fallback so the skeleton runs).
+- **Developability report** — sequence liabilities (N-glycosylation sequons,
+  Asn deamidation, Asp isomerisation, Asp-Pro fragmentation, Met/Trp oxidation,
+  free cysteines), isoelectric point, net charge at pH 7, GRAVY hydrophobicity.
+- **Structure (optional)** — Fv prediction via ABodyBuilder2 when
+  `ImmuneBuilder` is installed.
+
+## Install
+
+```bash
+pip install -e .                 # core: anthropic + biopython
+pip install -e ".[numbering]"    # add anarcii for real IMGT numbering (heavy)
+pip install -e ".[structure]"    # add ImmuneBuilder for Fv structure (heavy)
+export ANTHROPIC_API_KEY=...      # hackathon provides Claude credits
+```
+
+## Run
+
+```bash
+abagent          # start the chat agent
+```
+
+Then paste a sequence and ask, e.g. *"any liabilities in the CDRs I should worry
+about?"*
+
+## Layout
+
+| file | role |
+|------|------|
+| `abagent/sequence.py` | parse / validate / clean sequences |
+| `abagent/numbering.py` | numbering + CDR loops (anarcii or fallback) |
+| `abagent/developability.py` | liabilities, pI, charge, hydropathy (pure Python) |
+| `abagent/structure.py` | optional Fv structure prediction |
+| `abagent/report.py` | format analysis into readable text |
+| `abagent/tools.py` | tool schemas + implementations the agent calls |
+| `abagent/agent.py` | the Claude tool-use loop and REPL |
+
+## For hackathon day
+
+The skeleton is deliberately small so the day goes to the real challenge. Likely
+next steps once the organisers announce the specific problem:
+
+- Swap the heuristic CDR finder for `anarcii` (one `pip install`).
+- Add the specific property the challenge targets (affinity, stability, …) as a
+  new tool in `tools.py` — the agent picks it up automatically from `TOOL_SCHEMAS`.
+- Add a `suggest_mutations` tool that proposes fixes for flagged liabilities and
+  re-scores them.
+- Validate against a known therapeutic (trastuzumab is used in the smoke test).
+
+## Status
+
+Skeleton. The liability motifs and biophysical formulas are standard and
+referenced in the source; numbering falls back to an approximate engine until
+`anarcii` is installed. Not for clinical use.
