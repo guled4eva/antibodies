@@ -107,6 +107,30 @@ td.kind{font-weight:500; white-space:nowrap}
 .foot{border-top:1px solid var(--rule); margin-top:44px}
 .foot .wrap{padding-block:22px 48px; color:var(--muted); font-size:.8125rem}
 .foot p{margin:0 0 6px}
+.variant{padding-block:34px; border-top:1px solid var(--rule)}
+.variant h2{margin:0 0 6px; font-size:1.125rem; font-weight:600; letter-spacing:-0.01em}
+.variant .lede{margin-bottom:16px}
+.fixes{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 4px}
+.fix{font-family:var(--mono); font-size:.75rem; font-weight:500; padding:5px 10px;
+     border-radius:999px; border:1px solid var(--rule); background:transparent;
+     color:var(--ink); cursor:pointer}
+.fix b{font-weight:600}
+.nofix{font-size:.8125rem; color:var(--muted); margin:8px 0 0}
+.delta{display:grid; gap:10px 22px; grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));
+       margin:20px 0 4px}
+.d{border:1px solid var(--rule); border-radius:8px; padding:12px 14px; min-width:0}
+.d .k{font-size:.75rem; color:var(--muted)}
+.d .v{font-family:var(--mono); font-size:1rem; font-variant-numeric:tabular-nums; margin-top:3px}
+.d .v s{text-decoration:none; color:var(--muted)}
+.d .v em{font-style:normal; font-size:.8125rem}
+.up{color:var(--mid)} .down{color:var(--low)} .same{color:var(--muted)}
+.changes{margin-top:22px; display:grid; gap:8px}
+.ch{display:flex; gap:10px; align-items:baseline; font-size:.875rem}
+.ch .mk{font-family:var(--mono); font-size:.75rem; font-weight:600; padding:1px 8px;
+        border-radius:999px; border:1px solid currentColor; white-space:nowrap}
+.gone{color:var(--safe)} .new{color:var(--high)}
+.warn{margin-top:18px; padding:12px 14px; border-radius:8px; font-size:.875rem;
+      border:1px solid var(--high); color:var(--high)}
 @media (prefers-reduced-motion:no-preference){
   .chain{animation:rise .3s ease both}
   @keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
@@ -154,6 +178,27 @@ td.kind{font-weight:500; white-space:nowrap}
   </div>
 
   <div id="out"></div>
+
+  <section class="variant" id="variantPanel" hidden>
+    <h2>Compare a variant</h2>
+    <p class="lede">Change the heavy chain and see exactly which computed
+      properties move — including the ones you were not trying to change.
+      These are recomputed values, not predictions of binding or stability.</p>
+
+    <div class="field">
+      <label for="vheavy">Variant heavy chain</label>
+      <textarea id="vheavy" spellcheck="false"></textarea>
+    </div>
+
+    <div id="fixes"></div>
+
+    <div class="controls">
+      <button id="cmp" type="button">Compare with original</button>
+      <button id="resetv" class="ghost" type="button">Reset to original</button>
+    </div>
+    <p class="err" id="verr" hidden></p>
+    <div id="cmpout"></div>
+  </section>
 </main>
 
 <footer class="foot"><div class="wrap">
@@ -298,6 +343,8 @@ function render(chains){
   }).join("");
 }
 
+let CURRENT=null;
+
 function run(){
   const err=$("#err"); err.hidden=true;
   const h=$("#heavy").value.trim(), l=$("#light").value.trim();
@@ -307,7 +354,118 @@ function run(){
     if(h) chains.push(analyse(clean(h),"H"));
     if(l) chains.push(analyse(clean(l),"L"));
     render(chains);
-  }catch(e){ err.textContent=e.message; err.hidden=false; $("#out").innerHTML=""; }
+    CURRENT=chains;
+    const heavy=chains.find(c=>c.chain==="H");
+    $("#variantPanel").hidden=!heavy;
+    if(heavy){ $("#vheavy").value=heavy.seq; renderFixes(heavy); $("#cmpout").innerHTML=""; }
+  }catch(e){ err.textContent=e.message; err.hidden=false; $("#out").innerHTML="";
+             $("#variantPanel").hidden=true; CURRENT=null; }
+}
+
+/* ---- variant comparison ----
+   Conservative substitutions that remove a liability while preserving size and
+   character as far as possible. Each is a starting point for a designer, not a
+   recommendation: anything inside CDR3 risks binding and has to be tested. ---- */
+const FIXES={
+  "Deamidation (high)":{to:"Q", why:"Asn→Gln removes the deamidation site, keeping size and polarity"},
+  "Deamidation (low)": {to:"Q", why:"Asn→Gln removes the deamidation site"},
+  "Isomerisation":     {to:"E", why:"Asp→Glu cannot form the succinimide intermediate"},
+  "Fragmentation":     {to:"E", why:"Asp→Glu removes the acid-labile Asp-Pro bond"},
+  "Oxidation (Met)":   {to:"L", why:"Met→Leu keeps hydrophobic packing without the oxidisable thioether"},
+  "Oxidation (Trp)":   {to:"F", why:"Trp→Phe removes the indole; Trp is often a contact residue, so check binding"},
+  "N-glycosylation":   {to:"Q", why:"Asn→Gln breaks the N-X-S/T sequon"},
+};
+// Free cysteines are deliberately excluded: in a variable domain the flagged
+// cysteines are almost always the conserved Cys23–Cys104 disulfide, and
+// mutating either one unfolds the domain. Flag it, never "fix" it.
+function fixFor(l){
+  if(l.kind==="Free cysteine") return null;
+  const f=FIXES[l.kind]; if(!f) return null;
+  return {pos:l.position, to:f.to, why:f.why};
+}
+const mutate=(seq,pos,to)=>seq.slice(0,pos-1)+to+seq.slice(pos);
+
+function renderFixes(chain){
+  const seen=new Set(), out=[];
+  for(const l of chain.liabilities){
+    const f=fixFor(l); if(!f||seen.has(f.pos)) continue;
+    seen.add(f.pos);
+    const from=chain.seq[f.pos-1];
+    out.push(`<button class="fix" type="button" data-pos="${f.pos}" data-to="${f.to}"
+      title="${esc(f.why)}">${from}<b>${f.pos}</b>${f.to}</button>`);
+  }
+  const cys=chain.liabilities.filter(l=>l.kind==="Free cysteine").length;
+  $("#fixes").innerHTML = (out.length
+      ? `<div class="fixes">${out.join("")}</div>
+         <p class="nofix">Each button applies one substitution to the variant box. Hover for the rationale.</p>`
+      : `<p class="nofix">No substitutions proposed for this chain.</p>`)
+    + (cys ? `<p class="nofix">${cys} cysteine${cys>1?"s":""} flagged but not offered as fixes —
+         in a variable domain these are the conserved Cys23–Cys104 disulfide, and mutating
+         either unfolds the domain.</p>` : "");
+  for(const b of document.querySelectorAll(".fix")){
+    b.addEventListener("click",()=>{
+      const cur=$("#vheavy").value.trim()||chain.seq;
+      try{ $("#vheavy").value=mutate(clean(cur),+b.dataset.pos,b.dataset.to); compare(); }
+      catch(e){ $("#verr").textContent=e.message; $("#verr").hidden=false; }
+    });
+  }
+}
+
+function arrow(a,b,lowerIsBetter){
+  const d=b-a;
+  if(Math.abs(d)<0.005) return `<span class="same">no change</span>`;
+  const cls=(d<0)===!!lowerIsBetter?"down":"up";
+  return `<span class="${cls}">${d>0?"+":""}${(Math.round(d*100)/100).toFixed(2)}</span>`;
+}
+
+function compare(){
+  const err=$("#verr"); err.hidden=true;
+  const orig=CURRENT&&CURRENT.find(c=>c.chain==="H");
+  if(!orig){ err.textContent="Analyze a heavy chain first."; err.hidden=false; return; }
+  let v;
+  try{ v=analyse(clean($("#vheavy").value),"H"); }
+  catch(e){ err.textContent=e.message; err.hidden=false; $("#cmpout").innerHTML=""; return; }
+
+  const muts=[];
+  if(v.seq.length===orig.seq.length){
+    for(let i=0;i<v.seq.length;i++)
+      if(v.seq[i]!==orig.seq[i]) muts.push({pos:i+1,from:orig.seq[i],to:v.seq[i]});
+  }
+  const key=l=>l.kind+"@"+l.position;
+  const before=new Map(orig.liabilities.map(l=>[key(l),l]));
+  const after=new Map(v.liabilities.map(l=>[key(l),l]));
+  const gone=[...before.values()].filter(l=>!after.has(key(l)));
+  const added=[...after.values()].filter(l=>!before.has(key(l)));
+
+  const header = muts.length
+    ? muts.map(m=>`<span class="mk">${m.from}${m.pos}${m.to}</span>`).join(" ")
+    : (v.seq===orig.seq ? `<span class="same">identical to the original</span>`
+                        : `<span class="mk">length changed</span>`);
+
+  const cdrChanged = v.cdr3!==orig.cdr3;
+  $("#cmpout").innerHTML=`
+    <div class="changes"><div class="ch">${header}</div></div>
+    <div class="delta">
+      <div class="d"><div class="k">Liabilities</div>
+        <div class="v"><s>${orig.liabilities.length}</s> → ${v.liabilities.length}
+          <em>${arrow(orig.liabilities.length,v.liabilities.length,true)}</em></div></div>
+      <div class="d"><div class="k">pI</div>
+        <div class="v"><s>${r2(orig.pI)}</s> → ${r2(v.pI)} <em>${arrow(orig.pI,v.pI)}</em></div></div>
+      <div class="d"><div class="k">Net charge pH 7</div>
+        <div class="v"><s>${r2(orig.charge)}</s> → ${r2(v.charge)} <em>${arrow(orig.charge,v.charge)}</em></div></div>
+      <div class="d"><div class="k">GRAVY</div>
+        <div class="v"><s>${r3(orig.gravy)}</s> → ${r3(v.gravy)} <em>${arrow(orig.gravy,v.gravy)}</em></div></div>
+    </div>
+    ${cdrChanged?`<p class="warn">CDR3 changed: <b>${orig.cdr3||"—"}</b> → <b>${v.cdr3||"—"}</b>.
+       A substitution inside the binding loop can cost affinity and has to be tested
+       experimentally — this tool cannot tell you whether it still binds.</p>`:""}
+    <div class="changes">
+      ${gone.map(l=>`<div class="ch gone"><span class="mk">removed</span>
+          <span>${l.kind} at ${l.position}</span></div>`).join("")}
+      ${added.map(l=>`<div class="ch new"><span class="mk">introduced</span>
+          <span>${l.kind} at ${l.position}</span></div>`).join("")}
+      ${(!gone.length&&!added.length)?`<div class="ch same">No change to the liability list.</div>`:""}
+    </div>`;
 }
 
 const EXAMPLES={
@@ -320,6 +478,11 @@ const EXAMPLES={
 };
 function load(key){ $("#heavy").value=EXAMPLES[key].heavy; $("#light").value=EXAMPLES[key].light; run(); }
 $("#run").addEventListener("click",run);
+$("#cmp").addEventListener("click",compare);
+$("#resetv").addEventListener("click",()=>{
+  const h=CURRENT&&CURRENT.find(c=>c.chain==="H");
+  if(h){ $("#vheavy").value=h.seq; $("#cmpout").innerHTML=""; $("#verr").hidden=true; }
+});
 $("#ex1").addEventListener("click",()=>load("trastuzumab"));
 $("#ex2").addEventListener("click",()=>load("jkf"));
 load("trastuzumab");   // open in a working state
