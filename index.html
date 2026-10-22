@@ -194,10 +194,26 @@ td.kind{font-weight:500; white-space:nowrap}
 
     <div class="controls">
       <button id="cmp" type="button">Compare with original</button>
+      <button id="save" class="ghost" type="button">Save as candidate</button>
       <button id="resetv" class="ghost" type="button">Reset to original</button>
     </div>
     <p class="err" id="verr" hidden></p>
     <div id="cmpout"></div>
+  </section>
+
+  <section class="variant" id="candPanel" hidden>
+    <h2>Candidates</h2>
+    <p class="lede">Ranked by computed criteria only: liabilities left in the
+      binding loop first, then total liabilities, then whether CDR3 was touched.
+      This is not a prediction of affinity or stability — no method here can
+      tell you whether a variant still binds.</p>
+    <div class="tablewrap"><table id="candTable">
+      <thead><tr>
+        <th>Candidate</th><th>Mutations</th><th>In CDR3</th><th>Total</th>
+        <th>pI</th><th>Charge</th><th>GRAVY</th><th>CDR3</th><th></th>
+      </tr></thead>
+      <tbody id="candBody"></tbody>
+    </table></div>
   </section>
 </main>
 
@@ -358,8 +374,10 @@ function run(){
     const heavy=chains.find(c=>c.chain==="H");
     $("#variantPanel").hidden=!heavy;
     if(heavy){ $("#vheavy").value=heavy.seq; renderFixes(heavy); $("#cmpout").innerHTML=""; }
+    CANDIDATES=[]; renderCandidates();
   }catch(e){ err.textContent=e.message; err.hidden=false; $("#out").innerHTML="";
-             $("#variantPanel").hidden=true; CURRENT=null; }
+             $("#variantPanel").hidden=true; $("#candPanel").hidden=true;
+             CURRENT=null; CANDIDATES=[]; }
 }
 
 /* ---- variant comparison ----
@@ -468,6 +486,79 @@ function compare(){
     </div>`;
 }
 
+/* ---- candidates ----
+   Ranking uses only computed quantities, in an order a developability reviewer
+   would defend: liabilities still sitting in the binding loop cost the most,
+   then total liability count, then whether the paratope was disturbed at all.
+   Nothing here estimates affinity or stability. ---- */
+let CANDIDATES=[];
+
+function mutationsOf(orig,v){
+  if(v.seq.length!==orig.seq.length) return null;      // indel: can't name positions
+  const m=[];
+  for(let i=0;i<v.seq.length;i++) if(v.seq[i]!==orig.seq[i]) m.push(orig.seq[i]+(i+1)+v.seq[i]);
+  return m;
+}
+function inCdr3Count(c){
+  if(!c.cdr3) return 0;
+  const i=c.seq.indexOf(c.cdr3); if(i<0) return 0;
+  const from=i+1, to=i+c.cdr3.length;
+  return c.liabilities.filter(l=>l.position>=from&&l.position<=to).length;
+}
+function rankKey(c,orig){
+  return [inCdr3Count(c), c.liabilities.length, c.cdr3===orig.cdr3?0:1];
+}
+
+function saveCandidate(){
+  const orig=CURRENT&&CURRENT.find(x=>x.chain==="H");
+  const err=$("#verr"); err.hidden=true;
+  if(!orig){ err.textContent="Analyze a heavy chain first."; err.hidden=false; return; }
+  let v;
+  try{ v=analyse(clean($("#vheavy").value),"H"); }
+  catch(e){ err.textContent=e.message; err.hidden=false; return; }
+  if(CANDIDATES.some(c=>c.seq===v.seq)){ err.textContent="That candidate is already saved.";
+    err.hidden=false; return; }
+  v.mutations=mutationsOf(orig,v);
+  CANDIDATES.push(v);
+  renderCandidates();
+  $("#candPanel").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function renderCandidates(){
+  const orig=CURRENT&&CURRENT.find(x=>x.chain==="H");
+  if(!orig){ $("#candPanel").hidden=true; return; }
+  const rows=[{...orig,mutations:[],_base:true},...CANDIDATES];
+  rows.sort((a,b)=>{
+    const ka=rankKey(a,orig), kb=rankKey(b,orig);
+    for(let i=0;i<ka.length;i++) if(ka[i]!==kb[i]) return ka[i]-kb[i];
+    return 0;
+  });
+  $("#candPanel").hidden = CANDIDATES.length===0;
+  $("#candBody").innerHTML = rows.map((c,i)=>{
+    const muts = c._base ? `<span class="same">baseline</span>`
+      : (c.mutations===null ? `<span class="mk">length changed</span>`
+         : c.mutations.map(m=>`<span class="mk">${m}</span>`).join(" "));
+    const dl = c._base ? "" : arrow(orig.liabilities.length,c.liabilities.length,true);
+    const cdrCell = c.cdr3===orig.cdr3
+      ? `<span class="same">unchanged</span>`
+      : `<span class="new">altered</span>`;
+    return `<tr>
+      <td class="kind">${c._base?"Original":"Variant "+(CANDIDATES.indexOf(c)+1)}</td>
+      <td>${muts}</td>
+      <td class="pos">${inCdr3Count(c)}</td>
+      <td class="pos">${c.liabilities.length} <em class="v">${dl}</em></td>
+      <td class="pos">${r2(c.pI)}</td>
+      <td class="pos">${r2(c.charge)}</td>
+      <td class="pos">${r3(c.gravy)}</td>
+      <td>${c._base?`<span class="same">—</span>`:cdrCell}</td>
+      <td>${c._base?"":`<button class="fix" type="button" data-drop="${CANDIDATES.indexOf(c)}">remove</button>`}</td>
+    </tr>`;
+  }).join("");
+  for(const b of document.querySelectorAll("[data-drop]")){
+    b.addEventListener("click",()=>{ CANDIDATES.splice(+b.dataset.drop,1); renderCandidates(); });
+  }
+}
+
 const EXAMPLES={
   trastuzumab:{
     heavy:"EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSS",
@@ -479,6 +570,7 @@ const EXAMPLES={
 function load(key){ $("#heavy").value=EXAMPLES[key].heavy; $("#light").value=EXAMPLES[key].light; run(); }
 $("#run").addEventListener("click",run);
 $("#cmp").addEventListener("click",compare);
+$("#save").addEventListener("click",saveCandidate);
 $("#resetv").addEventListener("click",()=>{
   const h=CURRENT&&CURRENT.find(c=>c.chain==="H");
   if(h){ $("#vheavy").value=h.seq; $("#cmpout").innerHTML=""; $("#verr").hidden=true; }
