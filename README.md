@@ -54,6 +54,18 @@ Licensed CC-BY-4.0. If you use it, cite:
 > (2026). *SAbDab2 Machine Learning Dataset* (v0.3.0) [Dataset]. Zenodo.
 > https://doi.org/10.5281/zenodo.23343734
 
+## Web UI
+
+```bash
+python -m abagent.web          # opens http://localhost:8000
+```
+
+Paste a variable region, get a report with the liabilities marked on the
+sequence itself, ranked by consequence (a liability inside CDR3 is treated
+differently from the same chemistry in framework). Standard library only — no
+Flask, FastAPI or uvicorn — so a demo cannot fail because a web framework
+would not install.
+
 ## Run
 
 ```bash
