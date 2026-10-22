@@ -69,22 +69,17 @@ def test_dotenv_strips_inline_comments():
         os.environ.pop("ABAGENT_PROVIDER", None)
 
 
-def test_cdr3_known_limitation_extra_cysteines():
-    """Pins a KNOWN, ACCEPTED limitation of the fallback engine.
+def test_cdr3_handles_extra_cysteines():
+    """An extra cysteine must not shift the CDR3 start.
 
-    The heuristic treats the second cysteine as Cys104, so an antibody with an
-    extra cysteine before the real one gets a wrong CDR3. Measured impact on
-    real data is small (97.1% exact over 5,000 SAbDab2 structures); the
-    principled alternative -- anchoring on the J motif -- scored worse overall
-    (96.3%, with 0.5% no-call), so the trade-off is accepted rather than fixed.
-    Install anarcii for exact IMGT numbering.
-
-    This test asserts the wrong answer on purpose, so the limitation stays
-    visible instead of being forgotten.
+    The primary anchor assumes the second cysteine is Cys104. When that is
+    wrong the loop comes out implausibly long, and the engine re-anchors on the
+    conserved [YF]C of framework 3. This was the dominant failure mode against
+    SAbDab2 (96.4% -> 99.0% exact on the held-out split once fixed).
     """
     vh = TRAST_VH.replace("GFNIKDTY", "GFNIKCTY")
     assert vh.count("C") > TRAST_VH.count("C")  # genuinely has an extra cysteine
-    assert cdrs(vh, "H").cdr3 != "SRWGGDGFYAMDY"
+    assert cdrs(vh, "H").cdr3 == "SRWGGDGFYAMDY"
 
 
 def test_cdr3_length_is_plausible():

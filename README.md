@@ -132,8 +132,8 @@ antibodies dissimilar to the training set:
 
 | heavy-chain CDR3, held-out test split (n = 2,479) | |
 |---|---|
-| exact match | **96.4%** |
-| partial overlap | 3.4% |
+| exact match | **99.0%** |
+| partial overlap | 0.8% |
 | wrong | 0.0% |
 | no call | 0.2% |
 
@@ -143,18 +143,25 @@ Reproduce with:
 python scripts/benchmark_cdrs.py --split test --limit 5000 --show 0
 ```
 
-Two notes on method, because both change how the number should be read:
+Notes on method, because they change how the number should be read:
 
-- **Held-out matters.** The same code scores ~1 point higher when train and
-  test are mixed, so the mixed figure flatters it. We quote the test split.
-- **A rejected alternative.** Anchoring on the J motif (WGxG/FGxG) instead of
-  the second cysteine is more principled and survives extra cysteines, but
-  scored **94.8%** on this same held-out split — it gives up entirely on
-  antibodies whose J region doesn't match. It was reverted on that evidence.
+- **Parameters were tuned on train, scored once on test.** Train scored 99.00%
+  and test 98.99%, so the rule is not fitted to the data it is judged on.
+- **Held-out matters.** Mixing train and test flatters the score by about a
+  point, so the test split is what we quote.
+- **Two alternatives were tried and rejected on evidence** (train split):
+  anchoring on the last J motif and walking back to the nearest cysteine
+  (94.5% — gives up when no WGxG/FGxG is present), and always starting at the
+  last cysteine before the loop end (94.3% — CDR3s often contain their own
+  cysteine, which truncates the loop).
 
-Known limitation: the heuristic treats the second cysteine as Cys104, so an
-antibody with an extra cysteine before the real one can get a wrong loop.
-`pip install anarcii` for exact IMGT numbering.
+The failure this fixed: when an antibody carries an extra cysteine before
+Cys104, the primary anchor lands too early and the loop comes out ~60 residues
+too long. Detecting the implausible length and re-anchoring on the conserved
+`[YF]C` of framework 3 took the held-out score from 96.4% to 99.0%.
+
+Still approximate: `pip install anarcii` for exact IMGT numbering, and CDR1/CDR2
+are not called by the fallback engine at all.
 
 ## Status
 

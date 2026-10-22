@@ -13,6 +13,14 @@ import re
 from dataclasses import dataclass
 
 
+# Tuned on the SAbDab2 train split only; see _cdrs_heuristic for the numbers.
+# A CDR3 longer than this means the start anchor is wrong, not that the loop is
+# genuinely long (the sweep was flat from 20-50, so this is not a sharp fit).
+_LONG_SPAN = 25
+# Conserved framework-3 motif immediately preceding Cys104, e.g. ...YYC / YFC.
+_CYS104_MOTIF = r"[YF]C"
+
+
 @dataclass
 class CDRSet:
     chain: str
@@ -60,27 +68,38 @@ def _cdrs_heuristic(seq: str, chain: str) -> CDRSet:
     Heavy: CDR3 sits between the second conserved Cys and the WGxG motif.
     This is deliberately rough; use the anarcii path for anything real.
     """
-    # Measured against SAbDab2 ground truth (scripts/benchmark_cdrs.py) on the
-    # HELD-OUT test split, n=2479: 96.4% exact, 3.4% partial, 0.0% wrong,
-    # 0.2% no-call.  (Mixed train+test scores ~1 point higher; prefer the
-    # held-out figure when quoting accuracy.)
+    # Accuracy on the SAbDab2 HELD-OUT test split (n=2479, exact CDRH3 match),
+    # measured with scripts/benchmark_cdrs.py:
+    #     98.99%   this rule
+    #     96.41%   without the re-anchor step below
+    # Parameters (_LONG_SPAN, _CYS104_MOTIF) were chosen on the TRAIN split
+    # only; train scored 99.00% vs 98.99% test, so they are not overfitted.
     #
-    # Tried and REVERTED: anchoring on the last J motif (WGxG/FGxG) and walking
-    # back to the nearest cysteine. More principled and survives extra
-    # cysteines, but scored 94.8% on the same held-out split, because
-    # antibodies whose J region doesn't match those motifs get no call at all,
-    # whereas the rule below guesses and is usually right.
-    # Don't re-apply that change without re-running the benchmark.
+    # Also tried and rejected, both scoring worse on train:
+    #   - anchoring on the last J motif and walking back to the nearest
+    #     cysteine (94.5%): gives up entirely when no WGxG/FGxG is present.
+    #   - always starting at the last cysteine before the end (94.3%): CDR3
+    #     loops often contain their own cysteine, which truncates the loop.
+    # Re-run the benchmark before changing any of this.
     cys = [m.start() for m in re.finditer("C", seq)]
     cdr3 = ""
     if len(cys) >= 2:
         # IMGT CDR3 starts at position 105, immediately after the conserved
-        # Cys104 — not after the CAR/CAS motif.
+        # Cys104 — not after the CAR/CAS motif. The second cysteine is usually
+        # Cys104, which is why this is the primary anchor.
         start = cys[1] + 1
         m = re.search(r"WG.G", seq[start:])
         if m is None:
             m = re.search(r"FG.G", seq[start:])  # light-chain J motif
         end = start + m.start() if m else min(start + 15, len(seq))
+
+        # If that yields an implausibly long loop, the second cysteine was not
+        # Cys104 (the chain carries an extra cysteine earlier). Re-anchor on
+        # the conserved [YF]-Cys of framework 3, which marks Cys104 directly.
+        if end - start > _LONG_SPAN:
+            anchors = [m.start() + 1 for m in re.finditer(_CYS104_MOTIF, seq[:end])]
+            if anchors:
+                start = anchors[-1] + 1
         cdr3 = seq[start:end]
     # CDR1/CDR2 are only crudely placed; left blank rather than guessed wrongly
     return CDRSet(chain=chain, scheme="heuristic", cdr1="", cdr2="",
