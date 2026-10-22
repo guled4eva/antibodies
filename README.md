@@ -1,26 +1,45 @@
-# abagent — antibody developability agent
+# Antibody quality checker
 
-Built for the **AI × Antibodies Hackathon**, Oslo, 14 November 2026.
+Paste an antibody variable region, find out which of its sequence liabilities
+actually matter. Built for the **AI × Antibodies Hackathon**, Oslo,
+14 November 2026.
 
-You paste an antibody's heavy and/or light chain into a chat agent and ask
-questions. The agent calls deterministic analysis tools and explains the
-results the way a drug-discovery team needs them — *which* sequence liabilities
-actually matter, what the charge and hydrophobicity mean for formulation, and
-what to check or change next.
+The hackathon brief says the hard part is not running a model, it is building
+tools "that can produce results a drug discovery team can actually trust". So
+the organising principle here is that **every number is computed by code you
+can read, and every claim about accuracy is measured against experimental
+data** — including the claims that turned out to be wrong.
 
-The point of the hackathon is "results a drug-discovery team can actually
-trust", so the design keeps the science in small, inspectable Python functions
-and uses Claude only to orchestrate and explain — never to invent numbers.
+```bash
+pip install -e . && python -m abagent.web      # → http://localhost:8000
+```
 
-## What it does now
+## What it does
 
-- **Numbering + CDRs** — IMGT numbering and CDR extraction (`anarcii` when
-  installed; a conserved-residue heuristic as a fallback so the skeleton runs).
 - **Developability report** — sequence liabilities (N-glycosylation sequons,
   Asn deamidation, Asp isomerisation, Asp-Pro fragmentation, Met/Trp oxidation,
   free cysteines), isoelectric point, net charge at pH 7, GRAVY hydrophobicity.
-- **Structure (optional)** — Fv prediction via ABodyBuilder2 when
-  `ImmuneBuilder` is installed.
+  Liabilities are ranked by consequence: the same chemistry inside CDR3 can cost
+  binding, in framework it usually cannot.
+- **CDR extraction**, measured at **99.0% exact** against 2,479 held-out
+  experimental structures — see [Measured accuracy](#measured-accuracy).
+- **Two interfaces** — a web UI, and a chat agent that drives the same tools
+  under either Claude or Gemini and explains the output.
+- **Structural exposure** — per-IMGT-position solvent accessibility derived
+  from experimental structures, with a validated SASA implementation.
+
+## What it does not do
+
+Stated plainly, because a tool that hides its limits is the thing this project
+is arguing against:
+
+- The fallback CDR engine calls **CDR3 only**; CDR1 and CDR2 are not called.
+  `pip install anarcii` for exact IMGT numbering of every position.
+- Exposure data is computed and validated, but **not yet wired into the
+  liability report** — that needs IMGT numbering for arbitrary input sequences.
+- Nothing here is a binding-affinity or stability *predictor*. It reports
+  physical chemistry and flags risk; it does not claim to rank candidates.
+- Not for clinical use.
 
 ## Install
 
