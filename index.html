@@ -131,6 +131,20 @@ td.kind{font-weight:500; white-space:nowrap}
 .gone{color:var(--safe)} .new{color:var(--high)}
 .warn{margin-top:18px; padding:12px 14px; border-radius:8px; font-size:.875rem;
       border:1px solid var(--high); color:var(--high)}
+.ai{padding-block:34px; border-top:1px solid var(--rule)}
+.ai h2{margin:0 0 6px; font-size:1.125rem; font-weight:600; letter-spacing:-0.01em}
+.keyrow{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:14px 0}
+input[type=password]{flex:1 1 18rem; min-width:0; padding:9px 12px; border-radius:6px;
+  border:1px solid var(--rule); background:var(--sunken); color:var(--ink);
+  font-family:var(--mono); font-size:.8125rem}
+.said{margin-top:18px; border:1px solid var(--rule); border-radius:8px; padding:16px 18px;
+      background:var(--sunken); white-space:pre-wrap; line-height:1.6}
+.said:empty{display:none}
+.said h3{margin:0 0 .4rem; font-size:.9375rem; font-weight:600}
+.facts{margin-top:14px; font-family:var(--mono); font-size:.75rem; color:var(--muted);
+       white-space:pre-wrap; max-height:11rem; overflow:auto; border-left:2px solid var(--rule);
+       padding-left:12px}
+details{margin-top:12px} summary{cursor:pointer; font-size:.8125rem; color:var(--muted)}
 @media (prefers-reduced-motion:no-preference){
   .chain{animation:rise .3s ease both}
   @keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
@@ -214,6 +228,28 @@ td.kind{font-weight:500; white-space:nowrap}
       </tr></thead>
       <tbody id="candBody"></tbody>
     </table></div>
+  </section>
+
+  <section class="ai" id="aiPanel" hidden>
+    <h2>Explain the trade-offs</h2>
+    <p class="lede">An assistant reads the numbers computed above and explains what
+      they mean for a developability decision. It is given the figures and told
+      not to invent any — every quantity it cites comes from this page.</p>
+
+    <div class="keyrow">
+      <input id="gkey" type="password" autocomplete="off" spellcheck="false"
+             placeholder="Gemini API key — stays in this browser, never uploaded">
+      <button id="explain" type="button">Explain</button>
+    </div>
+    <p class="nofix">Get a free key at
+      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
+      The key is kept in this browser only and sent directly to Google.</p>
+    <p class="err" id="aerr" hidden></p>
+    <div class="said" id="saidOut"></div>
+    <details id="factsWrap" hidden>
+      <summary>The exact figures the assistant was given</summary>
+      <div class="facts" id="facts"></div>
+    </details>
   </section>
 </main>
 
@@ -375,8 +411,10 @@ function run(){
     $("#variantPanel").hidden=!heavy;
     if(heavy){ $("#vheavy").value=heavy.seq; renderFixes(heavy); $("#cmpout").innerHTML=""; }
     CANDIDATES=[]; renderCandidates();
+    $("#aiPanel").hidden=false;
   }catch(e){ err.textContent=e.message; err.hidden=false; $("#out").innerHTML="";
              $("#variantPanel").hidden=true; $("#candPanel").hidden=true;
+             $("#aiPanel").hidden=true;
              CURRENT=null; CANDIDATES=[]; }
 }
 
@@ -559,6 +597,93 @@ function renderCandidates(){
   }
 }
 
+/* ---- explanation layer ----
+   The model never computes anything. It receives the figures this page already
+   calculated and explains them; the exact text it was given is shown to the
+   user so any claim can be checked against it. ---- */
+const SYSTEM=`You are an antibody engineering assistant advising a drug-discovery team.
+You will be given developability figures that were computed deterministically from
+sequence. Explain what they mean for a decision.
+
+Rules:
+- Use ONLY the numbers given. Never invent or estimate a figure, and never state a
+  binding affinity, stability or immunogenicity value — none were measured.
+- A liability inside CDR3 can cost potency; the same chemistry in framework usually
+  cannot. Say which ones actually matter and why.
+- Flagged cysteines in a variable domain are the conserved Cys23-Cys104 disulfide.
+  Say so, and say they must not be mutated.
+- Where a variant alters CDR3, state plainly that binding has to be tested
+  experimentally and that nothing here can predict it.
+- Be concrete and brief: a short paragraph on the original, then the trade-off
+  between the candidates, then what you would check next in the lab.`;
+
+function factSheet(){
+  const orig=CURRENT&&CURRENT.find(c=>c.chain==="H");
+  if(!orig) return null;
+  const line=c=>{
+    const n=inCdr3Count(c);
+    return `  pI ${r2(c.pI)}, net charge pH7 ${r2(c.charge)}, GRAVY ${r3(c.gravy)}, `
+      +`CDR3 ${c.cdr3||"not called"}, liabilities ${c.liabilities.length} (${n} inside CDR3)`;
+  };
+  let t=`ORIGINAL heavy chain (${orig.length} aa)\n${line(orig)}\n  liabilities:\n`;
+  for(const l of orig.liabilities){
+    const i=orig.cdr3?orig.seq.indexOf(orig.cdr3):-1;
+    const inc=i>=0&&l.position>=i+1&&l.position<=i+orig.cdr3.length;
+    t+=`    ${l.kind} at ${l.position}${inc?" (in CDR3)":""}\n`;
+  }
+  const light=CURRENT.find(c=>c.chain==="L");
+  if(light) t+=`\nLIGHT chain (${light.length} aa)\n${line(light)}\n`;
+  if(CANDIDATES.length){
+    t+=`\nCANDIDATES\n`;
+    CANDIDATES.forEach((c,i)=>{
+      t+=`  Variant ${i+1} — mutations ${c.mutations&&c.mutations.length?c.mutations.join(", "):"n/a"}\n`
+        +`${line(c)}\n  CDR3 ${c.cdr3===orig.cdr3?"unchanged":"ALTERED from "+orig.cdr3}\n`;
+    });
+  } else {
+    t+=`\nNo variants saved yet.\n`;
+  }
+  t+=`\nMethod notes: CDR3 calling measured at 99.0% exact on 2,479 held-out SAbDab2
+structures. Liability motifs are literature priors (Lu et al. 2019), not measured
+outcomes. No solvent-accessibility data is applied in this build.`;
+  return t;
+}
+
+async function explain(){
+  const err=$("#aerr"); err.hidden=true;
+  const key=$("#gkey").value.trim();
+  const facts=factSheet();
+  if(!facts){ err.textContent="Analyze a sequence first."; err.hidden=false; return; }
+  if(!key){ err.textContent="Paste a Gemini API key to use the assistant."; err.hidden=false; return; }
+  try{ localStorage.setItem("abagent_key",key); }catch(e){}
+  $("#facts").textContent=facts; $("#factsWrap").hidden=false;
+  const btn=$("#explain"); btn.disabled=true; btn.textContent="Thinking…";
+  $("#saidOut").textContent="";
+  try{
+    const model=localStorage.getItem("abagent_model")||"gemini-3.8-flash";
+    const res=await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=`+encodeURIComponent(key),
+      {method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({
+         systemInstruction:{parts:[{text:SYSTEM}]},
+         contents:[{role:"user",parts:[{text:facts}]}]})});
+    const data=await res.json();
+    if(!res.ok){
+      const m=(data&&data.error&&data.error.message)||`HTTP ${res.status}`;
+      throw new Error(/API key not valid|API_KEY_INVALID/i.test(m)
+        ? "That API key was rejected. Check it at aistudio.google.com/apikey."
+        : /not found|not supported/i.test(m)
+        ? `Model "${model}" is unavailable for this key. ${m}`
+        : m);
+    }
+    const parts=data&&data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts;
+    const text=(parts||[]).map(p=>p.text||"").join("").trim();
+    $("#saidOut").textContent=text||"The model returned no text.";
+  }catch(e){
+    err.textContent=e.message||"Could not reach the model.";
+    err.hidden=false;
+  }finally{ btn.disabled=false; btn.textContent="Explain"; }
+}
+
 const EXAMPLES={
   trastuzumab:{
     heavy:"EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSS",
@@ -571,12 +696,14 @@ function load(key){ $("#heavy").value=EXAMPLES[key].heavy; $("#light").value=EXA
 $("#run").addEventListener("click",run);
 $("#cmp").addEventListener("click",compare);
 $("#save").addEventListener("click",saveCandidate);
+$("#explain").addEventListener("click",explain);
 $("#resetv").addEventListener("click",()=>{
   const h=CURRENT&&CURRENT.find(c=>c.chain==="H");
   if(h){ $("#vheavy").value=h.seq; $("#cmpout").innerHTML=""; $("#verr").hidden=true; }
 });
 $("#ex1").addEventListener("click",()=>load("trastuzumab"));
 $("#ex2").addEventListener("click",()=>load("jkf"));
+try{ const k=localStorage.getItem("abagent_key"); if(k) $("#gkey").value=k; }catch(e){}
 load("trastuzumab");   // open in a working state
 </script>
 </body>
