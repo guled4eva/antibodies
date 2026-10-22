@@ -186,9 +186,11 @@ details{margin-top:12px} summary{cursor:pointer; font-size:.8125rem; color:var(-
       <button id="run" type="button">Analyze sequence</button>
       <button id="ex1" class="ghost" type="button">Trastuzumab</button>
       <button id="ex2" class="ghost" type="button">PDB 8JKF</button>
+      <button id="ident" class="ghost" type="button">Identify</button>
       <span class="hint">FASTA headers and whitespace are fine.</span>
     </div>
     <p class="err" id="err" hidden></p>
+    <div id="identOut"></div>
   </div>
 
   <div id="out"></div>
@@ -409,6 +411,7 @@ function run(){
     CURRENT=chains;
     const heavy=chains.find(c=>c.chain==="H");
     $("#variantPanel").hidden=!heavy;
+    $("#identOut").innerHTML="";
     if(heavy){ $("#vheavy").value=heavy.seq; renderFixes(heavy); $("#cmpout").innerHTML=""; }
     CANDIDATES=[]; renderCandidates();
     $("#aiPanel").hidden=false;
@@ -597,6 +600,109 @@ function renderCandidates(){
   }
 }
 
+/* ---- identity lookup ----
+   "Have I seen this antibody before?" An exact hit means a solved structure
+   exists; a near hit says how close the sequence is to anything solved; no hit
+   suggests the sequence is novel. The dataset carries PDB accessions, not
+   therapeutic names, so that is what gets reported. Loaded on demand because
+   the index is a few hundred kB. ---- */
+let INDEX=null, INDEX_KMERS=null;
+const K=5;
+
+async function loadIndex(){
+  if(INDEX) return INDEX;
+  const res=await fetch("identity.json");
+  if(!res.ok) throw new Error("Could not load the reference index.");
+  INDEX=await res.json();
+  INDEX_KMERS={};
+  for(const chain of ["H","L"]){
+    const inv=new Map();
+    INDEX[chain].forEach(([seq],i)=>{
+      for(let j=0;j+K<=seq.length;j++){
+        const km=seq.slice(j,j+K);
+        let a=inv.get(km); if(!a) inv.set(km,a=[]);
+        if(a[a.length-1]!==i) a.push(i);
+      }
+    });
+    INDEX_KMERS[chain]=inv;
+  }
+  return INDEX;
+}
+
+function identity(a,b){           // ungapped identity over the overlap
+  const n=Math.min(a.length,b.length);
+  let same=0; for(let i=0;i<n;i++) if(a[i]===b[i]) same++;
+  return same/Math.max(a.length,b.length);
+}
+
+function bestMatches(seq,chain,topN=3){
+  const inv=INDEX_KMERS[chain], counts=new Map();
+  for(let j=0;j+K<=seq.length;j++){
+    const hits=inv.get(seq.slice(j,j+K)); if(!hits) continue;
+    for(const i of hits) counts.set(i,(counts.get(i)||0)+1);
+  }
+  const shortlist=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,40);
+  const qLoop=cdr3(seq);
+  return shortlist.map(([i])=>{
+    const [refSeq,pdbs]=INDEX[chain][i];
+    const rLoop=cdr3(refSeq);
+    return {seq:refSeq,pdbs,id:identity(seq,refSeq),
+            loop:rLoop, sameLoop: !!qLoop && qLoop===rLoop,
+            loopId: (qLoop&&rLoop)?identity(qLoop,rLoop):0};
+  }).sort((a,b)=> (b.sameLoop-a.sameLoop) || (b.loopId-a.loopId) || (b.id-a.id)).slice(0,topN);
+}
+
+function describePdb(acc){
+  const m=INDEX.pdb[acc]; if(!m) return acc;
+  const bits=[m.t,m.m==="XRAY"?`X-ray ${m.r} Å`:(m.m==="EM"?`cryo-EM ${m.r} Å`:m.m)];
+  if(m.ag) bits.push("binds "+m.ag.split("/")[0].toLowerCase());
+  return `${acc} <span class="same">(${bits.filter(Boolean).join(", ")})</span>`;
+}
+
+async function identify(){
+  const box=$("#identOut"), err=$("#err");
+  err.hidden=true;
+  box.innerHTML=`<p class="nofix">Loading reference structures…</p>`;
+  let heavy="",light="";
+  try{
+    if($("#heavy").value.trim()) heavy=clean($("#heavy").value);
+    if($("#light").value.trim()) light=clean($("#light").value);
+    if(!heavy&&!light) throw new Error("Add a sequence first.");
+    await loadIndex();
+  }catch(e){ box.innerHTML=""; err.textContent=e.message; err.hidden=false; return; }
+
+  const parts=[];
+  for(const [seq,chain,label] of [[heavy,"H","Heavy"],[light,"L","Light"]]){
+    if(!seq) continue;
+    const hits=bestMatches(seq,chain);
+    const n=INDEX._meta[chain==="H"?"heavy_sequences":"light_sequences"].toLocaleString();
+    if(!hits.length){
+      parts.push(`<div class="ch"><span class="mk">${label}</span>
+        <span>No match among ${n} solved ${label.toLowerCase()} chains.</span></div>`);
+      continue;
+    }
+    const top=hits[0];
+    if(top.id===1){
+      parts.push(`<div class="ch gone"><span class="mk">${label} · exact</span>
+        <span>${top.pdbs.map(describePdb).join(", ")}</span></div>`);
+    }else if(top.sameLoop){
+      // Same CDR3, different elsewhere: a variant of a solved antibody.
+      parts.push(`<div class="ch"><span class="mk">${label} · same CDR3</span>
+        <span>${(100*top.id).toFixed(1)}% identical to ${top.pdbs.map(describePdb).join(", ")} —
+        same binding loop, so likely a variant of a solved antibody.</span></div>`);
+    }else{
+      // Framework identity alone means little: any two VH domains score ~80%.
+      parts.push(`<div class="ch"><span class="mk">${label} · no match</span>
+        <span>Not among ${n} solved ${label.toLowerCase()} chains. Closest shares
+        ${(100*top.id).toFixed(0)}% overall (${top.pdbs[0]}) but a different CDR3
+        (<b>${top.loop||"—"}</b>), which is framework similarity, not the same antibody.</span></div>`);
+    }
+  }
+  box.innerHTML=`<div class="changes" style="margin-top:18px">${parts.join("")}</div>
+    <p class="nofix">Matched against SAbDab2 (${INDEX._meta.structures.toLocaleString()} structures).
+      The dataset records PDB accessions, not drug names — look the accession up on rcsb.org for that.</p>`;
+}
+
 /* ---- explanation layer ----
    The model never computes anything. It receives the figures this page already
    calculated and explains them; the exact text it was given is shown to the
@@ -697,6 +803,7 @@ $("#run").addEventListener("click",run);
 $("#cmp").addEventListener("click",compare);
 $("#save").addEventListener("click",saveCandidate);
 $("#explain").addEventListener("click",explain);
+$("#ident").addEventListener("click",identify);
 $("#resetv").addEventListener("click",()=>{
   const h=CURRENT&&CURRENT.find(c=>c.chain==="H");
   if(h){ $("#vheavy").value=h.seq; $("#cmpout").innerHTML=""; $("#verr").hidden=true; }

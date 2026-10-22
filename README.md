@@ -22,6 +22,13 @@ your browser, nothing is uploaded, nothing to install.
   binding, in framework it usually cannot.
 - **CDR extraction**, measured at **99.0% exact** against 2,479 held-out
   experimental structures — see [Measured accuracy](#measured-accuracy).
+- **Identity lookup** — tells you whether a sequence is a solved antibody, a
+  variant of one, or novel, by matching against 8,718 heavy and 6,009 light
+  chains from SAbDab2. Discriminates on CDR3 rather than overall identity,
+  because any two VH domains share ~80% framework.
+- **Variant comparison** — apply a proposed substitution and see every computed
+  property that moved, including the ones you were not aiming at, plus the
+  liabilities removed and introduced.
 - **Two interfaces** — the web tool above, and a chat agent that drives the same
   analysis under either Claude or Gemini and explains the output.
 - **Structural exposure** — per-IMGT-position solvent accessibility derived
