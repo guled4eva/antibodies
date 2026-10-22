@@ -121,6 +121,17 @@ def selftest() -> int:
         gb = GeminiBackend()
         checks["gemini: backend constructs"] = gb.name == "gemini"
         checks["gemini: chat session created"] = gb.chat is not None
+
+        # Actually invoke a tool the way the SDK does during automatic function
+        # calling. Construction succeeding does NOT mean tool calls work.
+        from google.genai import _extra_utils as _eu
+
+        from .tools import analyse_antibody as _aa
+
+        out = _eu.invoke_function_from_dict_args(
+            {"heavy": TRAST_VH, "name": "trastuzumab"}, _aa
+        )
+        checks["gemini: tool actually invokes"] = "Chain H" in out and "pI" in out
     except ImportError:
         print("  (google-genai not installed; skipping gemini checks)")
     except Exception as exc:  # construction should not hit the network

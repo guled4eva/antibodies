@@ -69,6 +69,44 @@ def test_dotenv_strips_inline_comments():
         os.environ.pop("ABAGENT_PROVIDER", None)
 
 
+def test_gemini_can_invoke_tools():
+    """Regression: Gemini's automatic function calling must be able to call the tools.
+
+    PEP 563 string annotations (`from __future__ import annotations` in tools.py)
+    break the SDK's isinstance() checks, so every tool call fails and the model
+    answers from memory instead. Exercises the SDK's real invocation path; no
+    network or API key needed.
+    """
+    try:
+        from google.genai import _extra_utils as eu
+    except ImportError:
+        return  # google-genai not installed; nothing to check
+
+    from abagent.tools import analyse_antibody, predict_structure
+
+    out = eu.invoke_function_from_dict_args(
+        {"heavy": TRAST_VH, "name": "trastuzumab"}, analyse_antibody
+    )
+    assert "Chain H" in out and "pI" in out, "tool did not return a real report"
+    # the model may omit optional args entirely
+    out2 = eu.invoke_function_from_dict_args({"heavy": TRAST_VH}, analyse_antibody)
+    assert "Chain H" in out2
+    eu.invoke_function_from_dict_args({"heavy": TRAST_VH}, predict_structure)
+
+
+def test_tool_annotations_are_real_types():
+    """The tool signatures must expose real types, not PEP 563 strings."""
+    import inspect
+
+    from abagent.tools import analyse_antibody
+
+    for param in inspect.signature(analyse_antibody).parameters.values():
+        assert not isinstance(param.annotation, str), (
+            f"{param.name} annotation is a string — remove "
+            "`from __future__ import annotations` from abagent/tools.py"
+        )
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

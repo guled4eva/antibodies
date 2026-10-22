@@ -1,11 +1,17 @@
-"""Tool definitions the Claude agent can call, plus their implementations.
+"""Tool definitions the agent can call, plus their implementations.
 
 Each tool is a small, deterministic Python function. The agent decides which
 to call; the functions do the actual antibody analysis and return plain text
 so results stay inspectable.
+
+IMPORTANT: do NOT add `from __future__ import annotations` to this module.
+Gemini's automatic function calling inspects these signatures at runtime and
+does isinstance() checks against the annotations. PEP 563 turns them into
+strings, which raises "isinstance() arg 2 must be a type" inside the SDK —
+every tool call then fails and the model silently answers from memory instead.
+See test_gemini_can_invoke_tools in tests/test_smoke.py.
 """
 
-from __future__ import annotations
 
 from .developability import analyse_chain
 from .numbering import cdrs
