@@ -608,7 +608,7 @@ function renderCandidates(){
    suggests the sequence is novel. The dataset carries PDB accessions, not
    therapeutic names, so that is what gets reported. Loaded on demand because
    the index is a few hundred kB. ---- */
-let INDEX=null, INDEX_KMERS=null;
+let INDEX=null, INDEX_KMERS=null, IDENTITY=null;
 const K=5;
 
 async function loadIndex(){
@@ -695,9 +695,9 @@ async function identify(){
     if($("#light").value.trim()) light=clean($("#light").value);
     if(!heavy&&!light) throw new Error("Add a sequence first.");
     await loadIndex();
-  }catch(e){ box.innerHTML=""; err.textContent=e.message; err.hidden=false; return; }
+  }catch(e){ box.innerHTML=""; err.textContent=e.message; err.hidden=false; IDENTITY=null; return; }
 
-  const parts=[];
+  const parts=[], found=[];
   for(const [seq,chain,label] of [[heavy,"H","Heavy"],[light,"L","Light"]]){
     if(!seq) continue;
     const hits=bestMatches(seq,chain);
@@ -709,15 +709,20 @@ async function identify(){
     }
     const top=hits[0];
     if(top.id===1){
+      found.push({label,kind:"exact match",pdbs:top.pdbs,pct:100});
       parts.push(`<div class="ch gone"><span class="mk">${label} · exact</span>
         <span>${top.pdbs.map(describePdb).join(", ")}</span></div>`);
     }else if(top.sameLoop){
       // Same CDR3, different elsewhere: a variant of a solved antibody.
+      found.push({label,kind:"same CDR3 (variant of a solved antibody)",
+                  pdbs:top.pdbs,pct:+(100*top.id).toFixed(1)});
       parts.push(`<div class="ch"><span class="mk">${label} · same CDR3</span>
         <span>${(100*top.id).toFixed(1)}% identical to ${top.pdbs.map(describePdb).join(", ")} —
         same binding loop, so likely a variant of a solved antibody.</span></div>`);
     }else{
       // Framework identity alone means little: any two VH domains score ~80%.
+      found.push({label,kind:"no match in the PDB (different CDR3)",pdbs:[],
+                  pct:+(100*top.id).toFixed(0)});
       parts.push(`<div class="ch"><span class="mk">${label} · no match</span>
         <span>Not among ${n} solved ${label.toLowerCase()} chains. Closest shares
         ${(100*top.id).toFixed(0)}% overall (${top.pdbs[0]}) but a different CDR3
@@ -727,7 +732,8 @@ async function identify(){
   box.innerHTML=`<div class="changes" style="margin-top:18px">${parts.join("")}</div>
     <p class="nofix">Matched against SAbDab2 (${INDEX._meta.structures.toLocaleString()} structures).
       Names are read live from the PDB; accessions link to the full entry.</p>`;
-  nameStructures();
+  IDENTITY=found;
+  await nameStructures();
 }
 
 /* ---- explanation layer ----
@@ -747,6 +753,11 @@ Rules:
   Say so, and say they must not be mutated.
 - Where a variant alters CDR3, state plainly that binding has to be tested
   experimentally and that nothing here can predict it.
+- If an IDENTITY section is present, open by naming the antibody from the PDB
+  title given there (e.g. a title containing "HERCEPTIN" means trastuzumab) and
+  cite the accession. If no identity is given, or the title does not name the
+  antibody, say the sequence was not matched rather than guessing a name. Never
+  name an antibody from memory of the sequence itself.
 - Be concrete and brief: a short paragraph on the original, then the trade-off
   between the candidates, then what you would check next in the lab.`;
 
@@ -758,7 +769,20 @@ function factSheet(){
     return `  pI ${r2(c.pI)}, net charge pH7 ${r2(c.charge)}, GRAVY ${r3(c.gravy)}, `
       +`CDR3 ${c.cdr3||"not called"}, liabilities ${c.liabilities.length} (${n} inside CDR3)`;
   };
-  let t=`ORIGINAL heavy chain (${orig.length} aa)\n${line(orig)}\n  liabilities:\n`;
+  let t="";
+  if(IDENTITY&&IDENTITY.length){
+    t+="IDENTITY (matched against solved structures)\n";
+    for(const f of IDENTITY){
+      const named=f.pdbs.map(a=>{
+        const title=TITLES.get(a);
+        return title?`${a} "${title}"`:a;
+      }).join(", ");
+      t+=`  ${f.label} chain: ${f.kind}`+(f.pdbs.length?` — ${named}`:"")
+        +(f.pct<100?` (${f.pct}% identical)`:"")+"\n";
+    }
+    t+="\n";
+  }
+  t+=`ORIGINAL heavy chain (${orig.length} aa)\n${line(orig)}\n  liabilities:\n`;
   for(const l of orig.liabilities){
     const i=orig.cdr3?orig.seq.indexOf(orig.cdr3):-1;
     const inc=i>=0&&l.position>=i+1&&l.position<=i+orig.cdr3.length;
@@ -784,9 +808,13 @@ outcomes. No solvent-accessibility data is applied in this build.`;
 async function explain(){
   const err=$("#aerr"); err.hidden=true;
   const key=$("#gkey").value.trim();
+  if(!CURRENT){ err.textContent="Analyze a sequence first."; err.hidden=false; return; }
+  if(!key){ err.textContent="Paste a Gemini API key to use the assistant."; err.hidden=false; return; }
+  // Identify first so the model can name the antibody from the PDB record
+  // instead of guessing it from the sequence.
+  if(!IDENTITY){ try{ await identify(); }catch(e){} }
   const facts=factSheet();
   if(!facts){ err.textContent="Analyze a sequence first."; err.hidden=false; return; }
-  if(!key){ err.textContent="Paste a Gemini API key to use the assistant."; err.hidden=false; return; }
   try{ localStorage.setItem("abagent_key",key); }catch(e){}
   $("#facts").textContent=facts; $("#factsWrap").hidden=false;
   const btn=$("#explain"); btn.disabled=true; btn.textContent="Thinking…";
