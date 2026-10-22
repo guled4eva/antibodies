@@ -14,7 +14,14 @@ residue is on the surface. A buried methionine does not oxidise.
 
 import math
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError as exc:  # pragma: no cover - environment problem, not logic
+    raise ImportError(
+        "abagent.sasa needs numpy. Install it with:\n"
+        "    python -m pip install numpy\n"
+        "(or reinstall the package: python -m pip install -e .)"
+    ) from exc
 
 # van der Waals radii (Angstrom), Bondi 1964.
 VDW_RADII = {"C": 1.70, "N": 1.55, "O": 1.52, "S": 1.80, "H": 1.20, "P": 1.80}
