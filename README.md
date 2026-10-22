@@ -10,8 +10,11 @@ the organising principle here is that **every number is computed by code you
 can read, and every claim about accuracy is measured against experimental
 data** — including the claims that turned out to be wrong.
 
+**Live demo:** https://guled4eva.github.io/antibodies/ — runs entirely in the
+browser, nothing is uploaded.
+
 ```bash
-pip install -e . && python -m abagent.web      # → http://localhost:8000
+pip install -e . && python -m abagent.web      # the same tool, locally
 ```
 
 ## What it does
