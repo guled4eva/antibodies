@@ -63,7 +63,10 @@ def _cdrs_heuristic(seq: str, chain: str) -> CDRSet:
     cys = [m.start() for m in re.finditer("C", seq)]
     cdr3 = ""
     if len(cys) >= 2:
-        start = cys[1] + 3  # just after the Cys ... CAR motif
+        # IMGT CDR3 starts at position 105, immediately after the conserved
+        # Cys104 — not after the CAR/CAS motif (verified against SAbDab2
+        # ground truth with scripts/benchmark_cdrs.py).
+        start = cys[1] + 1
         m = re.search(r"WG.G", seq[start:])
         if m is None:
             m = re.search(r"FG.G", seq[start:])  # light-chain J motif

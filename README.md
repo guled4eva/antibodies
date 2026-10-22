@@ -41,6 +41,14 @@ It is ~958 MB, so it is not committed; fetch it on demand:
 python scripts/get_data.py     # downloads + verifies + extracts into ./data (gitignored)
 ```
 
+The split CSVs carry ground-truth IMGT annotations (sequences, CDR loops,
+numbering) for every structure, so they can validate the tools without parsing
+a single `.cif`. Measure the CDR finder against them:
+
+```bash
+python scripts/benchmark_cdrs.py --limit 5000      # exact / partial / wrong
+```
+
 Licensed CC-BY-4.0. If you use it, cite:
 > Capel, H. L., Vavourakis, O., Williams, B. H., Taylor, C., & Deane, C. M.
 > (2026). *SAbDab2 Machine Learning Dataset* (v0.3.0) [Dataset]. Zenodo.
