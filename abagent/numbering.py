@@ -60,14 +60,16 @@ def _cdrs_heuristic(seq: str, chain: str) -> CDRSet:
     Heavy: CDR3 sits between the second conserved Cys and the WGxG motif.
     This is deliberately rough; use the anarcii path for anything real.
     """
-    # Measured against SAbDab2 ground truth (scripts/benchmark_cdrs.py,
-    # n=5000): 97.1% exact, 2.7% partial, 0.1% wrong, 0.0% no-call.
+    # Measured against SAbDab2 ground truth (scripts/benchmark_cdrs.py) on the
+    # HELD-OUT test split, n=2479: 96.4% exact, 3.4% partial, 0.0% wrong,
+    # 0.2% no-call.  (Mixed train+test scores ~1 point higher; prefer the
+    # held-out figure when quoting accuracy.)
     #
     # Tried and REVERTED: anchoring on the last J motif (WGxG/FGxG) and walking
-    # back to the nearest cysteine. It is more principled and survives extra
-    # cysteines, but scored WORSE on real data (96.3% exact, 0.5% no-call),
-    # because antibodies whose J region doesn't match those motifs get no call
-    # at all, whereas the fallback below guesses and is usually right.
+    # back to the nearest cysteine. More principled and survives extra
+    # cysteines, but scored 94.8% on the same held-out split, because
+    # antibodies whose J region doesn't match those motifs get no call at all,
+    # whereas the rule below guesses and is usually right.
     # Don't re-apply that change without re-running the benchmark.
     cys = [m.start() for m in re.finditer("C", seq)]
     cdr3 = ""

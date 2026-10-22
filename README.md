@@ -126,20 +126,35 @@ next steps once the organisers announce the specific problem:
 ## Measured accuracy
 
 The fallback CDR engine is scored against SAbDab2's ground-truth IMGT
-annotations rather than assumed to work (`scripts/benchmark_cdrs.py`,
-n = 5,000 paired structures):
+annotations rather than assumed to work (`scripts/benchmark_cdrs.py`).
+Headline figure is on the **held-out test split**, which SAbDab2 builds from
+antibodies dissimilar to the training set:
 
-| heavy-chain CDR3 | |
+| heavy-chain CDR3, held-out test split (n = 2,479) | |
 |---|---|
-| exact match | **97.1%** |
-| partial overlap | 2.7% |
-| wrong | 0.1% |
-| no call | 0.0% |
+| exact match | **96.4%** |
+| partial overlap | 3.4% |
+| wrong | 0.0% |
+| no call | 0.2% |
 
-Known limitation: the heuristic treats the second cysteine as Cys104, so
-antibodies with an extra cysteine can get a wrong loop. Anchoring on the J
-motif instead was tried and scored worse (96.3% exact, 0.5% no-call), so the
-simpler rule stands. `pip install anarcii` for exact IMGT numbering.
+Reproduce with:
+
+```bash
+python scripts/benchmark_cdrs.py --split test --limit 5000 --show 0
+```
+
+Two notes on method, because both change how the number should be read:
+
+- **Held-out matters.** The same code scores ~1 point higher when train and
+  test are mixed, so the mixed figure flatters it. We quote the test split.
+- **A rejected alternative.** Anchoring on the J motif (WGxG/FGxG) instead of
+  the second cysteine is more principled and survives extra cysteines, but
+  scored **94.8%** on this same held-out split — it gives up entirely on
+  antibodies whose J region doesn't match. It was reverted on that evidence.
+
+Known limitation: the heuristic treats the second cysteine as Cys104, so an
+antibody with an extra cysteine before the real one can get a wrong loop.
+`pip install anarcii` for exact IMGT numbering.
 
 ## Status
 
