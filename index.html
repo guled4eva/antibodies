@@ -129,6 +129,8 @@ td.kind{font-weight:500; white-space:nowrap}
 .ch .mk{font-family:var(--mono); font-size:.75rem; font-weight:600; padding:1px 8px;
         border-radius:999px; border:1px solid currentColor; white-space:nowrap}
 .gone{color:var(--safe)} .new{color:var(--high)}
+.title{color:var(--muted)}
+.ch a{color:inherit; text-underline-offset:2px}
 .warn{margin-top:18px; padding:12px 14px; border-radius:8px; font-size:.875rem;
       border:1px solid var(--high); color:var(--high)}
 .ai{padding-block:34px; border-top:1px solid var(--rule)}
@@ -653,10 +655,34 @@ function bestMatches(seq,chain,topN=3){
 }
 
 function describePdb(acc){
-  const m=INDEX.pdb[acc]; if(!m) return acc;
+  const m=INDEX.pdb[acc];
+  const link=`<a href="https://www.rcsb.org/structure/${acc}" target="_blank"
+    rel="noopener" id="acc-${acc}">${acc}</a>`;
+  if(!m) return link;
   const bits=[m.t,m.m==="XRAY"?`X-ray ${m.r} Å`:(m.m==="EM"?`cryo-EM ${m.r} Å`:m.m)];
   if(m.ag) bits.push("binds "+m.ag.split("/")[0].toLowerCase());
-  return `${acc} <span class="same">(${bits.filter(Boolean).join(", ")})</span>`;
+  return `${link} <span class="same">(${bits.filter(Boolean).join(", ")})</span>`
+        +`<span class="title" data-acc="${acc}"></span>`;
+}
+
+/* The dataset stores accessions, not names. The PDB itself holds a title for
+   every entry ("Herceptin Fab / HER2 complex"), which is where the name lives,
+   so fetch it rather than hard-coding a name table that could be wrong. If the
+   lookup fails the accession and its link still stand on their own. */
+const TITLES=new Map();
+async function nameStructures(){
+  const nodes=[...document.querySelectorAll(".title[data-acc]")];
+  await Promise.all([...new Set(nodes.map(n=>n.dataset.acc))].map(async acc=>{
+    if(!TITLES.has(acc)){
+      try{
+        const r=await fetch(`https://data.rcsb.org/rest/v1/core/entry/${acc}`);
+        const d=await r.json();
+        TITLES.set(acc,(d&&d.struct&&d.struct.title)||"");
+      }catch(e){ TITLES.set(acc,""); }
+    }
+    const t=TITLES.get(acc);
+    for(const n of nodes) if(n.dataset.acc===acc&&t) n.textContent=" — "+t;
+  }));
 }
 
 async function identify(){
@@ -700,7 +726,8 @@ async function identify(){
   }
   box.innerHTML=`<div class="changes" style="margin-top:18px">${parts.join("")}</div>
     <p class="nofix">Matched against SAbDab2 (${INDEX._meta.structures.toLocaleString()} structures).
-      The dataset records PDB accessions, not drug names — look the accession up on rcsb.org for that.</p>`;
+      Names are read live from the PDB; accessions link to the full entry.</p>`;
+  nameStructures();
 }
 
 /* ---- explanation layer ----
