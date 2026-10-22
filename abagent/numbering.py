@@ -74,9 +74,10 @@ def _cdrs_heuristic(seq: str, chain: str) -> CDRSet:
         if preceding_cys:
             start = preceding_cys[-1] + 1  # IMGT CDR3 begins right after Cys104
             candidate = seq[start:end]
-            # Real CDR3 loops run ~2-35 residues; anything else means the
-            # anchors were wrong, and a wrong loop is worse than none.
-            if 2 <= len(candidate) <= 35:
+            # Sanity guard only. Most CDR3s are 5-25 residues, but bovine
+            # ultralong CDRH3s reach ~70, so the cap stays generous: it exists
+            # to reject runaway framework-spanning calls, not to trim real loops.
+            if 2 <= len(candidate) <= 70:
                 cdr3 = candidate
     # CDR1/CDR2 are only crudely placed; left blank rather than guessed wrongly
     return CDRSet(chain=chain, scheme="heuristic", cdr1="", cdr2="",

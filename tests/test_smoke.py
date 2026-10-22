@@ -84,7 +84,7 @@ def test_cdr3_survives_extra_cysteines():
 def test_cdr3_length_is_plausible():
     """A wrong loop is worse than none: implausible lengths must be rejected."""
     loop = cdrs(TRAST_VH, "H").cdr3
-    assert 2 <= len(loop) <= 35
+    assert 2 <= len(loop) <= 70
     # no J motif at all -> no confident call
     assert cdrs("EVQLVESGGGLVQPCGGSLRLSCAAS", "H").cdr3 == ""
 
