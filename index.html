@@ -845,6 +845,19 @@ async function explain(){
   }finally{ btn.disabled=false; btn.textContent="Explain"; }
 }
 
+/* Sequences get pasted in all sorts of shapes — blocked in tens, wrapped from a
+   paper, with FASTA headers or residue numbers. clean() already strips that
+   before analysis; this normalises what the box shows so the two agree. */
+function tidy(raw){
+  return String(raw).split(/\r?\n/).filter(l=>!l.trim().startsWith(">"))
+    .join("").replace(/[\s0-9*]/g,"").toUpperCase();
+}
+for(const id of ["#heavy","#light","#vheavy"]){
+  const el=$(id); if(!el) continue;
+  el.addEventListener("paste",()=>setTimeout(()=>{ el.value=tidy(el.value); },0));
+  el.addEventListener("blur",()=>{ el.value=tidy(el.value); });
+}
+
 const EXAMPLES={
   trastuzumab:{
     heavy:"EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSS",
