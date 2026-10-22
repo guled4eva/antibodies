@@ -32,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from abagent.dataset import DatasetError, find_split_csv  # noqa: E402
 from abagent.sasa import parse_cif_atoms, residue_sasa  # noqa: E402
 
 
@@ -63,7 +64,8 @@ def representatives(csv_path, split, cluster_col="ab_cluster"):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--csv", required=True)
+    ap.add_argument("--csv", default=None,
+                    help="split CSV; may be a directory, or omitted to search --cif-dir")
     ap.add_argument("--cif-dir", required=True)
     ap.add_argument("--out", default="abagent/data/exposure.json")
     ap.add_argument("--split", default="train", choices=["train", "test", "all"])
@@ -71,8 +73,26 @@ def main(argv=None):
     ap.add_argument("--n-points", type=int, default=100)
     args = ap.parse_args(argv)
 
+    # The CSV usually sits somewhere under the extracted dataset, not at its
+    # root, so accept a directory (or nothing) and go find it.
+    csv_path = Path(args.csv) if args.csv else None
+    if csv_path is None or csv_path.is_dir():
+        search_root = csv_path or Path(args.cif_dir)
+        try:
+            csv_path = find_split_csv(search_root, "ab_split.csv")
+        except DatasetError:
+            try:
+                csv_path = find_split_csv(search_root)
+            except DatasetError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                return 1
+    if not csv_path.exists():
+        print(f"Error: no such file: {csv_path}", file=sys.stderr)
+        return 1
+    print(f"Using split file: {csv_path}")
+
     split = None if args.split == "all" else args.split
-    rows = representatives(args.csv, split)
+    rows = representatives(csv_path, split)
     if args.limit:
         rows = rows[:args.limit]
     print(f"{len(rows)} cluster representatives ({args.split} split)")
