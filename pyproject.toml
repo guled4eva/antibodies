@@ -27,4 +27,4 @@ abagent = "abagent.agent:main"
 packages = ["abagent"]
 
 [tool.setuptools.package-data]
-abagent = ["static/*.html", "data/*.json"]
+abagent = ["data/*.json"]

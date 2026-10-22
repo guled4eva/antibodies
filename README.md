@@ -10,12 +10,8 @@ the organising principle here is that **every number is computed by code you
 can read, and every claim about accuracy is measured against experimental
 data** — including the claims that turned out to be wrong.
 
-**Live demo:** https://guled4eva.github.io/antibodies/ — runs entirely in the
-browser, nothing is uploaded.
-
-```bash
-pip install -e . && python -m abagent.web      # the same tool, locally
-```
+**Use it here: https://guled4eva.github.io/antibodies/** — runs entirely in
+your browser, nothing is uploaded, nothing to install.
 
 ## What it does
 
@@ -26,8 +22,8 @@ pip install -e . && python -m abagent.web      # the same tool, locally
   binding, in framework it usually cannot.
 - **CDR extraction**, measured at **99.0% exact** against 2,479 held-out
   experimental structures — see [Measured accuracy](#measured-accuracy).
-- **Two interfaces** — a web UI, and a chat agent that drives the same tools
-  under either Claude or Gemini and explains the output.
+- **Two interfaces** — the web tool above, and a chat agent that drives the same
+  analysis under either Claude or Gemini and explains the output.
 - **Structural exposure** — per-IMGT-position solvent accessibility derived
   from experimental structures, with a validated SASA implementation.
 
@@ -75,18 +71,6 @@ Licensed CC-BY-4.0. If you use it, cite:
 > Capel, H. L., Vavourakis, O., Williams, B. H., Taylor, C., & Deane, C. M.
 > (2026). *SAbDab2 Machine Learning Dataset* (v0.3.0) [Dataset]. Zenodo.
 > https://doi.org/10.5281/zenodo.23343734
-
-## Web UI
-
-```bash
-python -m abagent.web          # opens http://localhost:8000
-```
-
-Paste a variable region, get a report with the liabilities marked on the
-sequence itself, ranked by consequence (a liability inside CDR3 is treated
-differently from the same chemistry in framework). Standard library only — no
-Flask, FastAPI or uvicorn — so a demo cannot fail because a web framework
-would not install.
 
 ## Run
 
