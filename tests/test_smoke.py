@@ -69,6 +69,26 @@ def test_dotenv_strips_inline_comments():
         os.environ.pop("ABAGENT_PROVIDER", None)
 
 
+def test_cdr3_survives_extra_cysteines():
+    """Regression: anchoring must not break on antibodies with extra cysteines.
+
+    The old heuristic indexed "the second cysteine" as Cys104, which on real
+    SAbDab2 entries with additional cysteines produced huge framework-spanning
+    calls. Anchoring on the J motif and walking back fixes it.
+    """
+    vh = TRAST_VH.replace("GFNIKDTY", "GFNIKCTY").replace("RIYPTNG", "RICPTNG")
+    assert vh.count("C") > TRAST_VH.count("C")  # genuinely has extra cysteines
+    assert cdrs(vh, "H").cdr3 == "SRWGGDGFYAMDY"
+
+
+def test_cdr3_length_is_plausible():
+    """A wrong loop is worse than none: implausible lengths must be rejected."""
+    loop = cdrs(TRAST_VH, "H").cdr3
+    assert 2 <= len(loop) <= 35
+    # no J motif at all -> no confident call
+    assert cdrs("EVQLVESGGGLVQPCGGSLRLSCAAS", "H").cdr3 == ""
+
+
 def test_gemini_can_invoke_tools():
     """Regression: Gemini's automatic function calling must be able to call the tools.
 

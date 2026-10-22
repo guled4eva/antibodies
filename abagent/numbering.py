@@ -60,18 +60,24 @@ def _cdrs_heuristic(seq: str, chain: str) -> CDRSet:
     Heavy: CDR3 sits between the second conserved Cys and the WGxG motif.
     This is deliberately rough; use the anarcii path for anything real.
     """
-    cys = [m.start() for m in re.finditer("C", seq)]
+    # Anchor on the J-region motif first (WGxG heavy / FGxG light), taking the
+    # LAST occurrence since the J region is C-terminal, then walk back to the
+    # nearest preceding cysteine — that is the conserved Cys104. Indexing by
+    # "the second cysteine" fails on the many real antibodies that carry extra
+    # cysteines, which showed up as huge framework-spanning calls when scored
+    # against SAbDab2 (scripts/benchmark_cdrs.py).
     cdr3 = ""
-    if len(cys) >= 2:
-        # IMGT CDR3 starts at position 105, immediately after the conserved
-        # Cys104 — not after the CAR/CAS motif (verified against SAbDab2
-        # ground truth with scripts/benchmark_cdrs.py).
-        start = cys[1] + 1
-        m = re.search(r"WG.G", seq[start:])
-        if m is None:
-            m = re.search(r"FG.G", seq[start:])  # light-chain J motif
-        end = start + m.start() if m else min(start + 15, len(seq))
-        cdr3 = seq[start:end]
+    motifs = list(re.finditer(r"WG.G|FG.G", seq))
+    if motifs:
+        end = motifs[-1].start()
+        preceding_cys = [i for i, aa in enumerate(seq[:end]) if aa == "C"]
+        if preceding_cys:
+            start = preceding_cys[-1] + 1  # IMGT CDR3 begins right after Cys104
+            candidate = seq[start:end]
+            # Real CDR3 loops run ~2-35 residues; anything else means the
+            # anchors were wrong, and a wrong loop is worse than none.
+            if 2 <= len(candidate) <= 35:
+                cdr3 = candidate
     # CDR1/CDR2 are only crudely placed; left blank rather than guessed wrongly
     return CDRSet(chain=chain, scheme="heuristic", cdr1="", cdr2="",
                   cdr3=cdr3, engine="heuristic")
