@@ -17,3 +17,9 @@ data/
 packaging/build/
 packaging/dist/
 *.spec.bak
+
+# SAbDab2 dataset — fetched from Zenodo, never committed (2.5 GB, 16k files)
+splits_final/
+splits/
+*.cif
+*.tar.gz
